@@ -133,7 +133,7 @@ class LineByLineTextDataset(Dataset):
         logger.info("Creating features from dataset file at %s", file_path)
 
         with open(file_path, encoding="utf-8") as f:
-            lines = [line.lower() for line in f.read().splitlines() if (len(line) > 0 and not line.isspace())]
+            lines = [(line.lower().split(), None) for line in tqdm(f.read().splitlines()) if (len(line) > 0 and not line.isspace())]
 
         self.examples = tokenizer.batch_encode_plus(lines, add_special_tokens=True, max_length=block_size)["input_ids"]
 
