@@ -1,0 +1,4 @@
+['remote "storage"']
+url = s3://cross-lingual-neural-language-models
+[core]
+remote = storage
