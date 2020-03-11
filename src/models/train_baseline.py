@@ -40,4 +40,4 @@ if __name__ == '__main__':
         split_path = './data/raw/europarl/{}-en/europarl-v7.{}-en.{}.split'.format(lang, lang, lang)
         d = get_databunch(split_path)
         learn = language_model_learner(d, AWD_LSTM, pretrained=False, metrics=[Perplexity()])
-        learn.fit_one_cycle(90, 5e-3, moms=(0.8,0.7,0.8), div=10)
+        learn.fit_one_cycle(90, 5e-3)
