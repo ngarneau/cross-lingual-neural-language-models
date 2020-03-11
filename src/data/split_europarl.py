@@ -5,12 +5,11 @@ import click
 import numpy as np
 
 
-languages = {
+LANGUAGES = {
     'bg',
     'cs',
     'da',
     'de',
-    'en',
     # 'el',  # we nous have encoding problems with el
     'es',
     'et',
