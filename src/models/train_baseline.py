@@ -1,10 +1,13 @@
+from functools import partial
+
 from fastai.text import *
 from fastai.text.data import *
+from fastai.callbacks import CSVLogger
 
 import logging
 
 
-LANGUAGES = {
+LANGUAGES = [
     'bg',
     'cs',
     'da',
@@ -25,7 +28,7 @@ LANGUAGES = {
     'sk',
     'sl',
     'sv'
-}
+]
 
 
 def get_databunch(path):
@@ -39,5 +42,11 @@ if __name__ == '__main__':
         logging.info("Starting training for {}".format(lang))
         split_path = './data/raw/europarl/{}-en/europarl-v7.{}-en.{}.split'.format(lang, lang, lang)
         d = get_databunch(split_path)
-        learn = language_model_learner(d, AWD_LSTM, pretrained=False, metrics=[Perplexity()])
+        learn = language_model_learner(
+            d,
+            AWD_LSTM,
+            pretrained=False,
+            metrics=[Perplexity()],
+            callback_fns=[partial(CSVLogger, filename='history_{}'.format(lang))]
+        )
         learn.fit_one_cycle(90, 5e-3)
