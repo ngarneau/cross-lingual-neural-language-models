@@ -65,7 +65,7 @@ def main(train_ratio, valid_ratio):
     # Special case for english
     logging.info("Tokenizing en corpus")
     split_dataset(
-        './data/raw/europarl/es-en/europarl-v7.es-en.en',
+        './data/processed/europarl/europarl.tokenized.en',
         train_ratio,
         valid_ratio
     )
@@ -73,7 +73,7 @@ def main(train_ratio, valid_ratio):
     for lang in LANGUAGES:
         logging.info("Splitting {} corpus".format(lang))
         split_dataset(
-            './data/raw/europarl/{}-en/europarl-v7.{}-en.{}'.format(lang, lang, lang),
+            './data/processed/europarl/europarl.tokenized.{}'.format(lang),
             train_ratio,
             valid_ratio
         )

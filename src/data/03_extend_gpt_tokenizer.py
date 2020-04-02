@@ -10,7 +10,7 @@ import click
 
 
 @click.command()
-@click.option('--train-file', default='./data/raw/europarl/es-en/europarl-v7.es-en.en.split/train/data.txt')
+@click.option('--train-file', default='./data/processed/europarl/europarl.tokenized.en.split/train/data.txt')
 @click.option('--output-path', default='./data/processed/gpt2-europarl-tokenizer/')
 def main(train_file, output_path):
     types = defaultdict(int)
