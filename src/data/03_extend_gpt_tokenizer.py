@@ -29,19 +29,15 @@ def main(train_file, output_path):
     logging.info("Filtered types: {}".format(len(filtered_types)))
 
     # Write vocab file
-    vocab = {word: i for i, word in enumerate(sorted(filtered_types))}
-    import pdb; pdb.set_trace()
+    vocab = {"<pad>": 0, "<unk>": 1, "<eos>": 2}
+    for word in sorted(filtered_types):
+        vocab[word] = len(vocab)
     with open("./data/processed/europarl.vocab", 'w') as fhandle:
-        json.dump(vocab, fhandle)
+        for word, idx in vocab.items():
+            fhandle.write("{} {}\n".format(word, idx))
 
-    # Write an empty merge file
-    with open("./data/processed/europarl.merges", 'w') as fhandle:
-        fhandle.write("#version: 0.2\n")
-
-    tokenizer = GPT2Tokenizer(
-        vocab_file="./data/processed/europarl.vocab",
-        merges_file="./data/processed/europarl.merges",
-        unk_token="<|unknown|>"
+    tokenizer = TransfoXLTokenizer(
+        vocab_file="./data/processed/europarl.vocab"
     )
 
     shutil.rmtree(output_path)
