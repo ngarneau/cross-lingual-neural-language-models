@@ -32,6 +32,8 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
+from torch import nn
+from torch.nn import CrossEntropyLoss
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
@@ -51,6 +53,7 @@ from transformers import (
     DistilBertTokenizer,
     GPT2Config,
     GPT2LMHeadModel,
+    GPT2Model,
     GPT2Tokenizer,
     OpenAIGPTConfig,
     OpenAIGPTLMHeadModel,
@@ -73,9 +76,126 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+CUTOFF = 1000000
+
+def get_vectors(path):
+    vectors = dict()
+    with open(path, 'r') as fhandle:
+        for i, line in enumerate(fhandle):
+            if i > CUTOFF:
+                break
+            elements = line.split()
+            if len(elements) > 2:
+                try:
+                    word = elements[0].lower()
+                    vector = np.asarray([float(i) for i in elements[1:]])
+                    vectors[word] = vector
+                except:
+                    print("Could not process line {}".format(i))
+    return vectors
+
+
+class MyEmbeddings(nn.Embedding):
+    def __init__(self, word_to_idx, embedding_dim):
+        super(MyEmbeddings, self).__init__(len(word_to_idx), embedding_dim, padding_idx=0)
+        self.embedding_dim = embedding_dim
+        self.vocab_size = len(word_to_idx)
+        self.word_to_idx = word_to_idx
+        self.idx_to_word = {i: w for w, i in self.word_to_idx.items()}
+
+    def set_item_embedding(self, idx, embedding):
+        if len(embedding) == self.embedding_dim:
+            self.weight.data[idx] = torch.FloatTensor(embedding)
+
+    def load_words_embeddings(self, vec_model):
+        for word in vec_model:
+            if word in self.word_to_idx:
+                idx = self.word_to_idx[word]
+                embedding = vec_model[word]
+                self.set_item_embedding(idx, embedding)
+
+
+class MyGPT2Model(GPT2Model):
+    def __init__(self, config):
+        super().__init__(config)
+
+    def reset_embeddings(self, my_embeddings):
+        self.wte = my_embeddings
+        self.input_mapping = nn.Linear(my_embeddings.embedding_dim, 768)
+        self.output_mapping = nn.Linear(768, my_embeddings.embedding_dim)
+
+    def forward(
+        self,
+        input_ids=None,
+        past=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+    ):
+        input_embeds = self.wte(input_ids)
+        mapped = self.input_mapping(input_embeds)
+
+        transformer_output = super().forward(
+            None,
+            past,
+            attention_mask,
+            token_type_ids,
+            position_ids,
+            head_mask,
+            mapped
+        )
+        return self.output_mapping(transformer_output[0]), transformer_output[1:]
+
+
+class MyGPT2LMHead(GPT2LMHeadModel):
+    def __init__(self, config):
+        super().__init__(config)
+
+    def set_transformer(self, transformer):
+        self.transformer = transformer
+        self.lm_head = nn.Linear(transformer.wte.embedding_dim, transformer.wte.vocab_size, bias=False)
+        self.tie_weights()
+
+    def forward(
+        self,
+        input_ids=None,
+        past=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        labels=None,
+    ):
+        transformer_outputs = self.transformer(
+            input_ids,
+            past=past,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+        )
+
+        lm_logits = self.lm_head(transformer_outputs[0])
+
+        outputs = (lm_logits,) + transformer_outputs[1:]
+        if labels is not None:
+            # Shift so that tokens < n predict n
+            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            loss_fct = CrossEntropyLoss()
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            outputs = (loss,) + outputs
+
+        return outputs
+
 
 MODEL_CLASSES = {
-    "gpt2": (GPT2Config, GPT2LMHeadModel, TransfoXLTokenizer),
+    "gpt2": (GPT2Config, MyGPT2LMHead, TransfoXLTokenizer),
     "openai-gpt": (OpenAIGPTConfig, OpenAIGPTLMHeadModel, OpenAIGPTTokenizer),
     "bert": (BertConfig, BertForMaskedLM, BertTokenizer),
     "roberta": (RobertaConfig, RobertaForMaskedLM, RobertaTokenizer),
@@ -134,7 +254,20 @@ class LineByLineTextDataset(Dataset):
         logger.info("Creating features from dataset file at %s", file_path)
 
         with open(file_path, encoding="utf-8") as f:
-            lines = [(line.lower().split() + ["<eos>"], None) for line in tqdm(f.read().splitlines()) if (len(line) > 0 and not line.isspace())]
+            lines = list()
+            for line in tqdm(f.read().splitlines()):
+                if (len(line) > 0 and not line.isspace()):
+                    words = line.lower().split()
+                    for word in line.lower().split():
+                        if '-' in word:
+                            for t in word.split('-'):
+                                words.append(t)
+                        elif '/' in word:
+                            for t in word.split('/'):
+                                words.append(t)
+                        else:
+                            words.append(word)
+                    lines.append((words + ["<eos>"], None))
 
         self.examples = tokenizer.batch_encode_plus(lines, add_special_tokens=True, max_length=block_size)["input_ids"]
 
@@ -254,11 +387,11 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     else:
         t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
 
-    model.resize_token_embeddings(0)  # Wipe out the previous embedding table
-    model.resize_token_embeddings(len(tokenizer))  # Resize it to our new vocab
+    # model.resize_token_embeddings(0)  # Wipe out the previous embedding table
+    # model.resize_token_embeddings(len(tokenizer))  # Resize it to our new vocab
 
     # We will train only the embeddings
-    params_to_train = [p for n, p in model.named_parameters() if 'wte' in n]
+    params_to_train = [p for n, p in model.named_parameters() if 'mapping' in n]
     optimizer = AdamW(params_to_train, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
@@ -722,6 +855,13 @@ def main():
     else:
         logger.info("Training new model from scratch")
         model = model_class(config=config)
+
+    ft_vectors = get_vectors('./data/raw/embeddings/wiki.en.vec')
+    my_embeddings = MyEmbeddings(tokenizer.get_vocab(), 300)
+    my_embeddings.load_words_embeddings(ft_vectors)
+    my_transformer = MyGPT2Model.from_pretrained("gpt2")
+    my_transformer.reset_embeddings(my_embeddings)
+    model.set_transformer(my_transformer)
 
     model.to(args.device)
 
