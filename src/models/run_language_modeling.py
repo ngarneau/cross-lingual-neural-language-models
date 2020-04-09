@@ -187,7 +187,7 @@ class MyGPT2LMHead(GPT2LMHeadModel):
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             # Flatten the tokens
-            loss_fct = CrossEntropyLoss()
+            loss_fct = CrossEntropyLoss(ignore_index=0)
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
             outputs = (loss,) + outputs
 
@@ -257,7 +257,7 @@ class LineByLineTextDataset(Dataset):
             lines = list()
             for line in tqdm(f.read().splitlines()):
                 if (len(line) > 0 and not line.isspace()):
-                    words = line.lower().split()
+                    words = list()
                     for word in line.lower().split():
                         if '-' in word:
                             for t in word.split('-'):
@@ -466,6 +466,7 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     set_seed(args)  # Added here for reproducibility
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
+        logging.info("Training")
         for step, batch in enumerate(epoch_iterator):
 
             # Skip past any already trained steps if resuming training
@@ -479,6 +480,7 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
             model.train()
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
+            logging.info("Step Loss:{}".format(float(loss)))
 
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -581,6 +583,7 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
     nb_eval_steps = 0
     model.eval()
 
+    logging.info("Evaluation:")
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
         inputs = inputs.to(args.device)
@@ -589,11 +592,13 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
         with torch.no_grad():
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
             lm_loss = outputs[0]
+            logging.info("Step Loss:{}".format(float(lm_loss)))
             eval_loss += lm_loss.mean().item()
         nb_eval_steps += 1
 
     eval_loss = eval_loss / nb_eval_steps
     perplexity = torch.exp(torch.tensor(eval_loss))
+    logging.info("Perplexity:{}".format(float(perplexity)))
 
     result = {"perplexity": perplexity}
 
@@ -802,7 +807,7 @@ def main():
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN,
+        level=logging.INFO
     )
     logger.warning(
         "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
@@ -856,7 +861,7 @@ def main():
         logger.info("Training new model from scratch")
         model = model_class(config=config)
 
-    ft_vectors = get_vectors('./data/raw/embeddings/wiki.en.vec')
+    ft_vectors = get_vectors('./data/raw/embeddings/wiki.en.align.vec')
     my_embeddings = MyEmbeddings(tokenizer.get_vocab(), 300)
     my_embeddings.load_words_embeddings(ft_vectors)
     my_transformer = MyGPT2Model.from_pretrained("gpt2")
@@ -914,7 +919,7 @@ def main():
             checkpoints = list(
                 os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
             )
-            logging.getLogger("transformers.modeling_utils").setLevel(logging.WARN)  # Reduce logging
+            logging.getLogger("transformers.modeling_utils").setLevel(logging.INFO)  # Reduce logging
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
         for checkpoint in checkpoints:
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
@@ -930,4 +935,7 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.INFO)  # Reduce logging
+    logging.basicConfig(filename="./output.log", level=logging.INFO)
+    logging.info("Test")
     main()
