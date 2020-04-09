@@ -121,8 +121,20 @@ class MyGPT2Model(GPT2Model):
 
     def reset_embeddings(self, my_embeddings):
         self.wte = my_embeddings
-        self.input_mapping = nn.Linear(my_embeddings.embedding_dim, 768)
-        self.output_mapping = nn.Linear(768, my_embeddings.embedding_dim)
+        self.input_mapping = nn.Sequential(
+            nn.Linear(my_embeddings.embedding_dim, 1024),
+            nn.Tanh(),
+            nn.Linear(1024, 1024),
+            nn.Tanh(),
+            nn.Linear(1024, 768),
+        )
+        self.output_mapping = nn.Sequential(
+            nn.Linear(768, 1024),
+            nn.Tanh(),
+            nn.Linear(1024, 1024),
+            nn.Tanh(),
+            nn.Linear(1024, my_embeddings.embedding_dim),
+        )
 
     def forward(
         self,
@@ -391,7 +403,9 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     # model.resize_token_embeddings(len(tokenizer))  # Resize it to our new vocab
 
     # We will train only the embeddings
-    params_to_train = [p for n, p in model.named_parameters() if 'mapping' in n]
+    excluded = ['wte', 'lm_head']
+    named_params_to_train = [(n, p) for n, p in model.named_parameters() if 'wte' not in n and 'head' not in n]
+    params_to_train = [p for n, p in named_params_to_train]
     optimizer = AdamW(params_to_train, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
