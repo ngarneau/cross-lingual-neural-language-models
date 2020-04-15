@@ -7,6 +7,22 @@ import json
 from transformers import *
 from tqdm import tqdm
 import click
+import numpy as np
+
+
+def get_vectors(path):
+    vectors = dict()
+    with open(path, 'r') as fhandle:
+        for i, line in enumerate(fhandle):
+            elements = line.split()
+            if len(elements) > 2:
+                try:
+                    word = elements[0].lower()
+                    vector = np.asarray([float(i) for i in elements[1:]])
+                    vectors[word] = vector
+                except:
+                    print("Could not process line {}".format(i))
+    return vectors
 
 
 @click.command()
@@ -14,23 +30,24 @@ import click
 @click.option('--output-path', default='./data/processed/gpt2-europarl-tokenizer/')
 def main(train_file, output_path):
     types = defaultdict(int)
+    ft_vectors = get_vectors('./data/raw/embeddings/wiki.en.align.vec')
 
     with open(train_file) as fhandle:
         for line in tqdm(fhandle):
             tokens = line.split()
             for t in tokens:
-                types[t.lower()] +=1
+                t = t.lower()
+                ts = t.split('-')
+                for a in ts:
+                    if a in ft_vectors:
+                        types[a] +=1
 
 
     logging.info("Total types: {}".format(len(types)))
-    logging.info("Reducing types that has less then 100 occurrences...")
-
-    filtered_types = {k: v for k, v in types.items() if v >= 2}
-    logging.info("Filtered types: {}".format(len(filtered_types)))
 
     # Write vocab file
-    vocab = {"<pad>": 0, "<unk>": 1, "<eos>": 2}
-    for word in sorted(filtered_types):
+    vocab = {"<pad>": 0, "<unk>": 1, "<sos>": 2, "<eos>": 3}
+    for word in sorted(types):
         vocab[word] = len(vocab)
     with open("./data/processed/europarl.vocab", 'w') as fhandle:
         for word, idx in vocab.items():
