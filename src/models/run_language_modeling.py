@@ -135,6 +135,12 @@ class MyGPT2Model(GPT2Model):
             nn.Tanh(),
             nn.Linear(1024, my_embeddings.embedding_dim),
         )
+        self.input_mapping.apply(self.my_init)
+        self.output_mapping.apply(self.my_init)
+
+    def my_init(self, m):
+        if type(m) == nn.Linear:
+            torch.nn.init.xavier_uniform(m.weight)
 
     def forward(
         self,
@@ -403,8 +409,7 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     # model.resize_token_embeddings(len(tokenizer))  # Resize it to our new vocab
 
     # We will train only the embeddings
-    excluded = ['wte', 'lm_head']
-    named_params_to_train = [(n, p) for n, p in model.named_parameters() if 'wte' not in n and 'head' not in n]
+    named_params_to_train = [(n, p) for n, p in model.named_parameters() if 'wte' not in n]
     params_to_train = [p for n, p in named_params_to_train]
     optimizer = AdamW(params_to_train, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
@@ -950,6 +955,6 @@ def main():
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)  # Reduce logging
-    logging.basicConfig(filename="./output.log", level=logging.INFO)
+    logging.basicConfig(filename="./output_test.log", level=logging.INFO)
     logging.info("Test")
     main()
