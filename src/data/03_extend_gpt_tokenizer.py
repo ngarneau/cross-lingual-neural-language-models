@@ -32,7 +32,18 @@ def main(train_file, output_path):
     types = defaultdict(int)
     ft_vectors = get_vectors('./data/raw/embeddings/wiki.en.align.vec')
 
+    # We will grab every word that has a vector either in the train or valid
     with open(train_file) as fhandle:
+        for line in tqdm(fhandle):
+            tokens = line.split()
+            for t in tokens:
+                t = t.lower()
+                ts = t.split('-')
+                for a in ts:
+                    if a in ft_vectors:
+                        types[a] +=1
+
+    with open(train_file.replace("train", "valid")) as fhandle:
         for line in tqdm(fhandle):
             tokens = line.split()
             for t in tokens:
@@ -46,7 +57,7 @@ def main(train_file, output_path):
     logging.info("Total types: {}".format(len(types)))
 
     # Write vocab file
-    vocab = {"<pad>": 0, "<unk>": 1, "<sos>": 2, "<eos>": 3}
+    vocab = {"<pad>": 0, '<unk>': 1, "</s>": 2}
     for word in sorted(types):
         vocab[word] = len(vocab)
     with open("./data/processed/europarl.vocab", 'w') as fhandle:
@@ -54,7 +65,8 @@ def main(train_file, output_path):
             fhandle.write("{} {}\n".format(word, idx))
 
     tokenizer = TransfoXLTokenizer(
-        vocab_file="./data/processed/europarl.vocab"
+        vocab_file="./data/processed/europarl.vocab",
+        eos_token="</s>"
     )
 
     shutil.rmtree(output_path)

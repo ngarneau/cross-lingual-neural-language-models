@@ -285,7 +285,7 @@ class LineByLineTextDataset(Dataset):
                                 words.append(t)
                         else:
                             words.append(word)
-                    lines.append((words + ["<eos>"], None))
+                    lines.append((["</s>"] + words + ["</s>"], None))
 
         self.examples = tokenizer.batch_encode_plus(lines, add_special_tokens=True, max_length=block_size)["input_ids"]
 
