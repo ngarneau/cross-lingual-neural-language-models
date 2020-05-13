@@ -76,20 +76,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-CUTOFF = 1000000
-
 def get_vectors(path):
     vectors = dict()
     with open(path, 'r') as fhandle:
         for i, line in enumerate(fhandle):
-            if i > CUTOFF:
-                break
             elements = line.split()
             if len(elements) > 2:
                 try:
                     word = elements[0].lower()
-                    vector = np.asarray([float(i) for i in elements[1:]])
-                    vectors[word] = vector
+                    if word not in vectors:
+                        vector = np.asarray([float(i) for i in elements[1:]])
+                        vectors[word] = vector
                 except:
                     print("Could not process line {}".format(i))
     return vectors
@@ -173,7 +170,7 @@ class MyGPT2LMHead(GPT2LMHeadModel):
 
     def set_transformer(self, transformer):
         self.transformer = transformer
-        self.lm_head = nn.Linear(transformer.wte.embedding_dim, transformer.wte.vocab_size, bias=False)
+        self.lm_head = nn.Linear(transformer.wte.embedding_dim, transformer.wte.vocab_size)
         self.tie_weights()
 
     def forward(
