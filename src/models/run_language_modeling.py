@@ -148,7 +148,7 @@ class MyGPT2LMHead(GPT2LMHeadModel):
 
     def set_transformer(self, transformer):
         self.transformer = transformer
-        self.lm_head = nn.Linear(transformer.wte.embedding_dim, transformer.wte.vocab_size)
+        self.lm_head = nn.Linear(transformer.wte.embedding_dim, transformer.wte.vocab_size, bias=False)
         self.tie_weights()
 
     def forward(
