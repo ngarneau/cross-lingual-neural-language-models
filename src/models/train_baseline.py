@@ -104,8 +104,9 @@ if __name__ == '__main__':
 
         vocab = Vocab(itos)
         stoi = {k: v for k, v in vocab.stoi.items()}
-        split_path = './data/processed/europarl/europarl.tokenized.{}.split_files'.format(lang)
-        databunch = TextLMDataBunch.from_folder(split_path, bs=128, vocab=vocab, num_workers=4)
+        split_path = './data/processed/europarl/'
+        csv_name = 'europarl.tokenized.{}.csv.lower'.format(lang)
+        databunch = TextLMDataBunch.from_csv(split_path, csv_name, delimiter='\t', text_cols=0, bs=128, vocab=vocab, num_workers=4)
 
         logging.info("Starting training for {}".format(lang))
         learn = language_model_learner(
