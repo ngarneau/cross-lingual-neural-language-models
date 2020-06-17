@@ -120,8 +120,12 @@ if __name__ == '__main__':
                 partial(SaveModelCallback)
             ]
         )
+
+        x = torch.randn(300)
+        unknown_vector = x.div(x.norm().expand_as(x))
+
         load_words_embeddings(learn.model[0], vectors, stoi)
-        learn.model[0].encoder.weight
+        learn.model[0].encoder.weight.data[0] = unknown_vector
         learn.model[0].encoder.weight.requires_grad = False
         learn.fit_one_cycle(90, 5e-3)
 
