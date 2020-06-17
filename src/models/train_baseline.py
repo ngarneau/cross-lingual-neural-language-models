@@ -32,7 +32,7 @@ LANGUAGES = [
 
 
 def get_databunch(path):
-    databunch = TextLMDataBunch.from_folder(path)
+    databunch = TextLMDataBunch.from_folder(path, bs=128)
     return databunch
 
 
@@ -68,7 +68,7 @@ def load_words_embeddings(model, vec_model, word_to_idx):
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
-    config = {'emb_sz': 300, 'n_hid': 1152, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'output_p': 0.1, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2, 'tie_weights': True, 'out_bias': True}
+    config = {'emb_sz': 300, 'n_hid': 1152, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'output_p': 0.1, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2, 'tie_weights': True, 'out_bias': False}
     for lang in LANGUAGES:
         logging.info("Starting training for {}".format(lang))
         split_path = './data/processed/europarl/europarl.tokenized.{}.split'.format(lang)
@@ -86,3 +86,5 @@ if __name__ == '__main__':
         learn.model[0].encoder.weight
         learn.model[0].encoder.weight.requires_grad = False
         learn.fit_one_cycle(90, 5e-3)
+        learn.save("en_freeze")
+
