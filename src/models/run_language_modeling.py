@@ -76,20 +76,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-CUTOFF = 1000000
-
 def get_vectors(path):
     vectors = dict()
     with open(path, 'r') as fhandle:
         for i, line in enumerate(fhandle):
-            if i > CUTOFF:
-                break
             elements = line.split()
             if len(elements) > 2:
                 try:
                     word = elements[0].lower()
-                    vector = np.asarray([float(i) for i in elements[1:]])
-                    vectors[word] = vector
+                    if word not in vectors:
+                        vector = np.asarray([float(i) for i in elements[1:]])
+                        vectors[word] = vector
                 except:
                     print("Could not process line {}".format(i))
     return vectors
@@ -97,7 +94,7 @@ def get_vectors(path):
 
 class MyEmbeddings(nn.Embedding):
     def __init__(self, word_to_idx, embedding_dim):
-        super(MyEmbeddings, self).__init__(len(word_to_idx), embedding_dim, padding_idx=0)
+        super(MyEmbeddings, self).__init__(len(word_to_idx), embedding_dim, padding_idx=0, max_norm=1)
         self.embedding_dim = embedding_dim
         self.vocab_size = len(word_to_idx)
         self.word_to_idx = word_to_idx
@@ -127,6 +124,7 @@ class MyGPT2Model(GPT2Model):
             nn.Linear(1024, 1024),
             nn.Tanh(),
             nn.Linear(1024, 768),
+            nn.LayerNorm(768)
         )
         self.output_mapping = nn.Sequential(
             nn.Linear(768, 1024),
@@ -134,6 +132,7 @@ class MyGPT2Model(GPT2Model):
             nn.Linear(1024, 1024),
             nn.Tanh(),
             nn.Linear(1024, my_embeddings.embedding_dim),
+            nn.LayerNorm(my_embeddings.embedding_dim)
         )
         self.input_mapping.apply(self.my_init)
         self.output_mapping.apply(self.my_init)
@@ -285,7 +284,7 @@ class LineByLineTextDataset(Dataset):
                                 words.append(t)
                         else:
                             words.append(word)
-                    lines.append((words + ["<eos>"], None))
+                    lines.append((["</s>"] + words + ["</s>"], None))
 
         self.examples = tokenizer.batch_encode_plus(lines, add_special_tokens=True, max_length=block_size)["input_ids"]
 
@@ -880,9 +879,14 @@ def main():
         logger.info("Training new model from scratch")
         model = model_class(config=config)
 
+
+    x = torch.rand(300)
+    unknown_vector = x.div(x.norm().expand_as(x))
+
     ft_vectors = get_vectors('./data/raw/embeddings/wiki.en.align.vec')
     my_embeddings = MyEmbeddings(tokenizer.get_vocab(), 300)
     my_embeddings.load_words_embeddings(ft_vectors)
+    my_embeddings.weight.data[1] = unknown_vector.data
     my_transformer = MyGPT2Model.from_pretrained("gpt2")
     my_transformer.reset_embeddings(my_embeddings)
     model.set_transformer(my_transformer)
@@ -955,6 +959,6 @@ def main():
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)  # Reduce logging
-    logging.basicConfig(filename="./output_test.log", level=logging.INFO)
+    logging.basicConfig(filename="./output_unk.log", level=logging.INFO)
     logging.info("Test")
     main()
