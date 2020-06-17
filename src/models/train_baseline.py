@@ -58,6 +58,7 @@ def load_words_embeddings(model, vec_model, word_to_idx):
             idx = word_to_idx[word]
             embedding = vec_model[word]
             set_item_embedding(model, idx, embedding)
+    set_item_embedding(model, 2, vec_model['</s>'])
 
 
 if __name__ == '__main__':
@@ -66,7 +67,7 @@ if __name__ == '__main__':
         'emb_sz': 300,
         'n_hid': 1152,
         'n_layers': 3,
-        'pad_token': 0,
+        'pad_token': 1,
         'qrnn': False,
         'bidir': False,
         'output_p': 0.1,
@@ -94,16 +95,16 @@ if __name__ == '__main__':
                         if a in vectors:
                             words.add(a)
 
-        itos = collections.defaultdict(lambda: "<unk>")
-        itos[0] = "<pad>"
-        itos[1] = "<unk>"
-        itos[2] = "</s>"
+        itos = list()
+        itos.append("<unk>")
+        itos.append("<pad>")
+        itos.append("xxbos")
         for word in words:
-            itos[len(itos)] = word
+            itos.append(word)
 
         vocab = Vocab(itos)
-        vocab.save('./processed/fastai_english.vocab')
-        split_path = './data/processed/europarl/europarl.tokenized.{}.split'.format(lang)
+        stoi = {k: v for k, v in vocab.stoi.items()}
+        split_path = './data/processed/europarl/europarl.tokenized.{}.split_files'.format(lang)
         databunch = TextLMDataBunch.from_folder(split_path, bs=128, vocab=vocab, num_workers=4)
 
         logging.info("Starting training for {}".format(lang))
@@ -118,7 +119,7 @@ if __name__ == '__main__':
                 partial(SaveModelCallback)
             ]
         )
-        load_words_embeddings(learn.model[0], vectors, vocab.stoi)
+        load_words_embeddings(learn.model[0], vectors, stoi)
         learn.model[0].encoder.weight
         learn.model[0].encoder.weight.requires_grad = False
         learn.fit_one_cycle(90, 5e-3)

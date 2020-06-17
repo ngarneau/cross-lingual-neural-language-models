@@ -35,6 +35,12 @@ def write_split(filename, split, lines):
             fhandle.write(line)
 
 
+def write_lines(filename, lines):
+    for i, line in enumerate(lines):
+        with open("{}/{}.txt".format(filename, i), 'w') as fhandle:
+            fhandle.write(line.lower())
+
+
 def split_dataset(filename, train_ratio, valid_ratio):
     lines = list()
     with open(filename) as fhandle:
@@ -55,6 +61,13 @@ def split_dataset(filename, train_ratio, valid_ratio):
     write_split(filename + ".split/train", 'data.txt', train_lines)
     write_split(filename + ".split/valid", 'data.txt', valid_lines)
     write_split(filename + ".split/test", 'data.txt', test_lines)
+
+    os.makedirs(filename + ".split_files/train", exist_ok=True)
+    os.makedirs(filename + ".split_files/valid", exist_ok=True)
+    os.makedirs(filename + ".split_files/test", exist_ok=True)
+    write_lines(filename + ".split_files/train", train_lines)
+    write_lines(filename + ".split_files/valid", valid_lines)
+    write_lines(filename + ".split_files/test", test_lines)
 
 
 @click.command()
