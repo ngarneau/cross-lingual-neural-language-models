@@ -120,17 +120,21 @@ class MyGPT2Model(GPT2Model):
         self.wte = my_embeddings
         self.input_mapping = nn.Sequential(
             nn.Linear(my_embeddings.embedding_dim, 1024),
-            nn.Tanh(),
+            nn.LayerNorm(1024),
+            nn.ELU(),
             nn.Linear(1024, 1024),
-            nn.Tanh(),
+            nn.LayerNorm(1024),
+            nn.ELU(),
             nn.Linear(1024, 768),
             nn.LayerNorm(768)
         )
         self.output_mapping = nn.Sequential(
             nn.Linear(768, 1024),
-            nn.Tanh(),
+            nn.LayerNorm(1024),
+            nn.ELU(),
             nn.Linear(1024, 1024),
-            nn.Tanh(),
+            nn.LayerNorm(1024),
+            nn.ELU(),
             nn.Linear(1024, my_embeddings.embedding_dim),
             nn.LayerNorm(my_embeddings.embedding_dim)
         )
